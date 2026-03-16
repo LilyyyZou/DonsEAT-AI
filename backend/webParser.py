@@ -1,6 +1,15 @@
 import requests
 from bs4 import BeautifulSoup
 from datetime import date 
+from pymongo import MongoClient
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+client = MongoClient(os.getenv("MONGO_URI"))
+db = client["DonsEat"]
+collection = db["menu_items"]
+collection.create_index("name", unique=True)
 
 # to be used after Jan 23rd (?) or whenever the school caf opens again to get new menu items
 jintian = date.today()
@@ -35,9 +44,7 @@ if response.status_code == 200:
     for item in food_items:
         food_name = item.get_text(strip=True)
         if food_name: 
-            unique_foods.add(food_name)
-            
-    for food in sorted(unique_foods):
-        print(food)
+            collection.update_one({"name": food_name}, {"$setOnInsert": {"name": food_name, "first_seen": str(jintian)}}, upsert=True)
+
 else: 
     print(f"Failed. Status code: {response.status_code}")
