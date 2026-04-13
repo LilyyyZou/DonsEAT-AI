@@ -12,11 +12,34 @@ function Login() {
     const handleLogin = async (e) => {
         e.preventDefault();
         setIsLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        localStorage.setItem('isLoggedIn', 'true');
-        localStorage.setItem('user', JSON.stringify({ username: email.split('@')[0] }));
-        setIsLoading(false);
-        navigate('/');
+        try {
+            // Call the Python API
+            const response = await fetch("http://localhost:8000/api/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email: email,
+                    password: password
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                // Throws an error to be caught by the catch block
+                throw new Error(data.detail || "Login failed");
+            }
+
+            // Success
+            localStorage.setItem('isLoggedIn', 'true');
+            localStorage.setItem('user', JSON.stringify(data.user));
+            navigate('/');
+            
+        } catch (error) {
+            alert(error.message); // In a real app, set an error state here like you did in Signup
+        } finally {
+            setIsLoading(false);
+        }
     }
 
     return (

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict
 from pymongo import MongoClient
+from pymongo.collection import Collection
 from dotenv import load_dotenv
 from typing import Optional
 import bcrypt
@@ -14,18 +15,11 @@ class User:
     password: str
     reviews: list[str]
 
-def connect(): 
-    load_dotenv()
-    client = MongoClient(os.getenv("MONGO_URI"))
-    db = client["usr"]
-    collection = db["Users"]
-    collection
-
-def register_user(username: str, email: str, password: str) -> tuple[bool, str]:
+def register_user(username: str, email: str, password: str, collection: Collection) -> tuple[bool, str]:
     try: 
-        collection = connect() 
-        userId = str(uuid.uudid4())
+        userId = str(uuid.uuid4())
         
+        # Use the injected collection
         if collection.find_one({"username": username}):
             return False, "Username already exists"
         if collection.find_one({"email": email}): 
@@ -47,18 +41,19 @@ def register_user(username: str, email: str, password: str) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e) 
 
-def retrieve_user(username: str, password: str) -> Optional[User]: 
+def retrieve_user(username: str, password: str, collection: Collection) -> Optional[User]: 
     try:
-        collection = connect()
         user_data = collection.find_one({"username": username})
         
         if user_data:
-            # Verify the provided password against the hashed password
-            hashed_password = user_data["password"].encode('utf-8')
+            hashed_password = user_data["password"]
             if bcrypt.checkpw(password.encode('utf-8'), hashed_password):
                 user_data.pop('_id', None)
                 return User(**user_data)
         
+        return None
+    except Exception as e: 
+        print(f"An error occurred during retrieval: {e}")
         return None
     
     except Exception as e: 

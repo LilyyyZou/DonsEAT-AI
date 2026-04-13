@@ -1,48 +1,69 @@
-# api.py
-from fastapi import FastAPI, HTTPException
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from user import User, register_user, retrieve_user
+from pymongo import MongoClient
+from pymongo.collection import Collection
+from dotenv import load_dotenv
 
-app = FastAPI()
+from models.user import User, register_user, retrieve_user
 
-# Allow your React app to communicate with this API
+load_dotenv()
+
+# 1. Manage the database lifecycle
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize the client connection pool
+    app.mongodb_client = MongoClient(os.getenv("MONGO_URI"))
+    app.db = app.mongodb_client["usr"]
+    print("Connected to MongoDB!")
+    
+    yield # The FastAPI app runs here
+    
+    # Shutdown: Cleanly close the connection pool
+    app.mongodb_client.close()
+    print("Disconnected from MongoDB.")
+
+app = FastAPI(lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"], # Add your React frontend URL here
+    allow_origins=["http://localhost:5173", "http://localhost:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Pydantic models to validate incoming React JSON requests
 class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
 
 class LoginRequest(BaseModel):
-    email: str
+    username: str # Note: changed from email to match retrieve_user logic
     password: str
 
+# 2. Create a dependency function to grab the collection
+def get_user_collection(request: Request) -> Collection:
+    return request.app.db["Users"]
+
+# 3. Inject the collection using Depends()
 @app.post("/api/register")
-def register(req: RegisterRequest):
-    new_user = User(
-        userId="",
-        username=req.username,
-        email=req.email,
-        password=req.password,
-        reviews=[]
-    )
-    success, msg = register_user(new_user)
+def register(req: RegisterRequest, collection: Collection = Depends(get_user_collection)):
+    # Pass the injected collection to your business logic
+    success, msg = register_user(req.username, req.email, req.password, collection)
+    
     if success:
         return {"message": "User registered successfully"}
     else:
         raise HTTPException(status_code=400, detail=msg)
 
 @app.post("/api/login")
-def login(req: LoginRequest):
-    user = retrieve_user(req.email, req.password)
+def login(req: LoginRequest, collection: Collection = Depends(get_user_collection)):
+    # Pass the injected collection to your business logic
+    user = retrieve_user(req.username, req.password, collection)
+    
     if user:
         return {
             "message": "Login successful", 
@@ -52,4 +73,4 @@ def login(req: LoginRequest):
             }
         }
     else:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+        raise HTTPException(status_code=401, detail="Invalid username or password")

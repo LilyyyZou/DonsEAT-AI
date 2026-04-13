@@ -40,18 +40,31 @@ function Signup(){
         }
         setIsLoading(true);
         try{
-            console.log("Registering and auto-logging in:", formData);
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            const newUser = {
-                username: formData.username,
-                email: formData.email,
-                role: "Dons"
+            // Call the Python API
+            const response = await fetch("http://localhost:8000/api/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    username: formData.username,
+                    email: formData.email,
+                    password: formData.password
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                // If the backend returns an error (e.g. "Username already exists")
+                throw new Error(data.detail || "Registration failed");
             }
+
+            // Success
+            const newUser = { username: formData.username, email: formData.email, role: "Dons" };
             localStorage.setItem('isLoggedIn', 'true');
             localStorage.setItem('user', JSON.stringify(newUser));
             alert(`Welcome to DonsEAT, ${formData.username}!`);
             navigate('/');
-        }catch (err) {
+        } catch (err) {
             setError('Registration failed. Please try again.');
         } finally {
             setIsLoading(false);
